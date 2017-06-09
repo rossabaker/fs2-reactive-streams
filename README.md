@@ -1,8 +1,8 @@
 # fs2-reactive-streams
 A reactive streams implementation for [fs2](https://github.com/functional-streams-for-scala/fs2)
 
-[![Build Status](https://travis-ci.org/zainab-ali/fs2-reactive-streams.svg?branch=master)](http://travis-ci.org/zainab-ali/fs2-reactive-streams)
-[![codecov](https://codecov.io/gh/zainab-ali/fs2-reactive-streams/branch/master/graph/badge.svg)](https://codecov.io/gh/zainab-ali/fs2-reactive-streams)
+[![Build Status](https://travis-ci.org/zainab-ali/fs2-reactive-streams.svg?branch=master)](http://travis-ci.org/to-ithaca/fs2-reactive-streams)
+[![codecov](https://codecov.io/gh/zainab-ali/fs2-reactive-streams/branch/master/graph/badge.svg)](https://codecov.io/gh/to-ithaca/fs2-reactive-streams)
 
 ## To use
 
@@ -29,7 +29,7 @@ val upstream = Stream[Task, Int](1, 2, 3)
 // upstream: fs2.Stream[fs2.Task,Int] = Segment(Emit(Chunk(1, 2, 3)))
 
 val publisher = upstream.toUnicastPublisher
-// publisher: fs2.interop.reactivestreams.StreamUnicastPublisher[fs2.Task,Int] = fs2.interop.reactivestreams.StreamUnicastPublisher@25e04d6f
+// publisher: fs2.interop.reactivestreams.StreamUnicastPublisher[fs2.Task,Int] = fs2.interop.reactivestreams.StreamUnicastPublisher@53c85dc3
 
 val downstream = publisher.toStream[Task]
 // downstream: fs2.Stream[fs2.Task,Int] = attemptEval(Task).flatMap(<function1>).flatMap(<function1>)
@@ -85,10 +85,10 @@ To convert from an `Source` to a `Stream`:
 
 ```scala
 val source = Source(1 to 5)
-// source: akka.stream.scaladsl.Source[Int,akka.NotUsed] = Source(SourceShape(StatefulMapConcat.out(1044284125)))
+// source: akka.stream.scaladsl.Source[Int,akka.NotUsed] = Source(SourceShape(StatefulMapConcat.out(1143832644)))
 
 val publisher = source.runWith(Sink.asPublisher[Int](fanout = false))
-// publisher: org.reactivestreams.Publisher[Int] = VirtualProcessor(state = Publisher[StatefulMapConcat.out(1044284125)])
+// publisher: org.reactivestreams.Publisher[Int] = VirtualProcessor(state = Publisher[StatefulMapConcat.out(1143832644)])
 
 val stream = publisher.toStream[Task]
 // stream: fs2.Stream[fs2.Task,Int] = attemptEval(Task).flatMap(<function1>).flatMap(<function1>)
@@ -104,7 +104,7 @@ val stream = Stream.emits[Task, Int]((1 to 5).toSeq)
 // stream: fs2.Stream[fs2.Task,Int] = Segment(Emit(Chunk(1, 2, 3, 4, 5)))
 
 val source = Source.fromPublisher(stream.toUnicastPublisher)
-// source: akka.stream.scaladsl.Source[Int,akka.NotUsed] = Source(SourceShape(PublisherSource.out(72060556)))
+// source: akka.stream.scaladsl.Source[Int,akka.NotUsed] = Source(SourceShape(PublisherSource.out(1925405460)))
 
 Task.fromFuture(source.runWith(Sink.seq[Int])).unsafeRun()
 // res5: scala.collection.immutable.Seq[Int] = Vector(1, 2, 3, 4, 5)
