@@ -17,7 +17,8 @@ import scala.concurrent.ExecutionContext
   *
   * @see https://github.com/reactive-streams/reactive-streams-jvm#3-subscription-code
   */
-final class StreamSubscription[F[_]: Effect, A](requests: Queue[F, StreamSubscription.Request],
+final class StreamSubscription[F[_]: Effect, A](semaphore: Semaphore[F],
+                                                requests: Queue[F, StreamSubscription.Request],
                                                 sub: Subscriber[A],
                                                 stream: Stream[F, A])
                                                (implicit ec: ExecutionContext) extends Subscription {
@@ -40,14 +41,21 @@ final class StreamSubscription[F[_]: Effect, A](requests: Queue[F, StreamSubscri
   }
 
   def cancel(): Unit =
-    async.unsafeRunAsync(requests.enqueue1(Cancelled))(_ => IO.unit)
+    async.unsafeRunAsync(
+      semaphore.decrement >>
+        requests.enqueue1(Cancelled) >>
+        semaphore.increment
+    )(_ => IO.unit)
 
   def request(n: Long): Unit = {
-    val request =
-      if (n == java.lang.Long.MAX_VALUE) InfiniteRequests
-      else if (n > 0) FiniteRequests(n)
-      else InvalidNumber(n)
-    async.unsafeRunAsync(requests.enqueue1(request))(_ => IO.unit)
+    async.unsafeRunAsync(semaphore.decrement >>
+      requests.enqueue1(
+        if (n == java.lang.Long.MAX_VALUE) InfiniteRequests
+        else if (n > 0) FiniteRequests(n)
+        else InvalidNumber(n)
+      ) >>
+      semaphore.increment
+    )(_ => IO.unit)
   }
 }
 
@@ -78,9 +86,10 @@ object StreamSubscription {
   case class InvalidNumber(n: Long) extends Throwable with Request
 
   def apply[F[_]: Effect, A](sub: Subscriber[A], stream: Stream[F, A])(implicit ec: ExecutionContext): F[StreamSubscription[F, A]] =
-    async.unboundedQueue[F, Request].map { requests =>
-      new StreamSubscription(requests, sub, stream)
-    }
+    for {
+      semaphore <- Semaphore[F](1L)
+      requests <- async.unboundedQueue[F, Request]
+    } yield new StreamSubscription(semaphore, requests, sub, stream)
 
   def subscriptionPipe[F[_]: Effect, A](requests: Stream[F, Request])(implicit ec: ExecutionContext): Pipe[F, A, A] = {
 
