@@ -7,7 +7,9 @@ import java.util.concurrent.Executors
 import cats.effect._
 import org.reactivestreams._
 import org.reactivestreams.tck.{PublisherVerification, TestEnvironment}
-import org.scalatest.testng.TestNGSuiteLike
+import org.testng.annotations.Test
+import org.scalatest._
+import org.scalatest.testng._
 
 import scala.concurrent.ExecutionContext
 
@@ -25,7 +27,7 @@ class FailedPublisher extends Publisher[Int] {
 
 class StreamUnicastPublisherSpec extends PublisherVerification[Int](new TestEnvironment(1000L)) with TestNGSuiteLike {
 
-  implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor())
+  implicit val ec: ExecutionContext = ExecutionContext.global //fromExecutor(Executors.newSingleThreadExecutor())
 
   def createPublisher(n: Long): StreamUnicastPublisher[IO, Int] = {
     val s =
@@ -34,6 +36,12 @@ class StreamUnicastPublisherSpec extends PublisherVerification[Int](new TestEnvi
 
     s.covary[IO].toUnicastPublisher()
   }
+
+  /*
+   "it" should "work" in {
+   required_createPublisher3MustProduceAStreamOfExactly3Elements()
+  }
+ */
 
   def createFailedPublisher(): FailedPublisher = new FailedPublisher()
 }

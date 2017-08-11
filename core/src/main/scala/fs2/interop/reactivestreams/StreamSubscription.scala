@@ -25,7 +25,7 @@ final class StreamSubscription[F[_]: Effect, A](requests: Queue[F, StreamSubscri
 
   async.unsafeRunAsync {
     stream
-      .through(subscriptionPipe(requests.dequeueAvailable))
+      .through(subscriptionPipe(requests.dequeue))
       .map(sub.onNext)
       .run
   } {
@@ -88,13 +88,14 @@ object StreamSubscription {
            rs: Stream[F, Request]): Pull[F, A, Unit] =
       rs.pull.uncons1.flatMap {
         case None =>
+          //println(s"No more requests")
           Pull.done
         case Some((request, rs)) => request match {
           case InfiniteRequests =>
             as.pull.unconsAsync.flatMap(aap => rs.pull.unconsAsync.flatMap(rap => goInfinite(aap, rap)))
 
           case FiniteRequests(n) =>
-            as.pull.unconsAsync.flatMap(aap => rs.pull.unconsAsync.flatMap(rap => goFinite(aap, rap, rs, n)))
+            as.pull.unconsAsync.flatMap(aap => rs.pull.unconsAsync.flatMap(rap => goFinite(aap, rap, n)))
 
           case Cancelled              => Pull.fail(Cancellation)
           case err @ InvalidNumber(_) => Pull.fail(err)
@@ -103,33 +104,38 @@ object StreamSubscription {
 
     def goFinite(aap: AsyncPull[F, Option[(Segment[A, Unit], Stream[F, A])]],
                  rap: AsyncPull[F, Option[(Segment[Request, Unit], Stream[F, Request])]],
-                 rs: Stream[F, Request],
                  n: Long): Pull[F, A, Unit] =
       (aap race rap).pull.flatMap {
         case Left(Some((segment, as))) =>
           Pull.segment(segment.take(n)).flatMap {
             case Left((_, rem)) =>
-              as.pull.unconsAsync.flatMap(goFinite(_, rap, rs, rem))
+              //println(s"Wanted $n, still need $rem")
+              as.pull.unconsAsync.flatMap(goFinite(_, rap, rem))
             case Right(rest) =>
-              go(as.cons(rest), rs)
+              //println(s"Wanted $n, got $n, left $rest")
+              as.cons(rest).pull.unconsAsync.flatMap(goFinite(_, rap, 0))
+              // go(as.cons(rest), rap.pull.stream)
           }
 
         case Right(Some((requests, rs))) =>
           requests.uncons1 match {
             case Left(()) =>
-              Pull.done
+              //println(s"Want $n, got empty request segment")
+              rs.pull.unconsAsync.flatMap(goFinite(aap, _, n))
             case Right((request, rest)) =>
+              //println(s"Want $n, requested $request")
               val asyncPull = rs.cons(rest).pull.unconsAsync
               request match {
                 case InfiniteRequests                => asyncPull.flatMap(goInfinite(aap, _))
-                case FiniteRequests(m) if m + n > 0L => asyncPull.flatMap(goFinite(aap, _, rs, m + n))
+                case FiniteRequests(m) if m + n > 0L => asyncPull.flatMap(goFinite(aap, _, m + n))
                 case FiniteRequests(_)               => asyncPull.flatMap(goInfinite(aap, _))
                 case Cancelled                       => Pull.fail(Cancellation)
                 case err@InvalidNumber(_)            => Pull.fail(err)
               }
           }
 
-        case Left(None) | Right(None) =>
+        case x => // Left(None) | Right(None) =>
+          //println("Well, bye: "+x)
           Pull.done
       }
 
@@ -142,7 +148,7 @@ object StreamSubscription {
         case Right(Some((requests, rs))) =>
           requests.uncons1 match {
             case Left(()) =>
-              Pull.done
+              rs.pull.unconsAsync.flatMap(goInfinite(aap, _))
             case Right((request, rest)) => request match {
               case InfiniteRequests | FiniteRequests(_) => rs.cons(rest).pull.unconsAsync.flatMap(goInfinite(aap, _))
               case Cancelled                            => Pull.fail(Cancellation)
